@@ -1,0 +1,93 @@
+---
+title: "FA_Week1_Assignment"
+author: "Zhilin Yang"
+date: '2023-01-11'
+output: html_document
+---
+Get Data
+```{r}
+
+library(quantmod)
+# daily format
+# use symbol name "EFFR" for business days
+getSymbols("EFFR",src="FRED",from = as.Date("2022-01-01"), to = as.Date("2022-12-22"))
+FedFunds<-EFFR
+colnames(FedFunds)<-"FedFunds"
+
+head(FedFunds)
+```
+```{r}
+sp500 <- new.env()
+getSymbols("^GSPC", env = sp500, src = "yahoo",from = as.Date("2022-01-01"), to = as.Date("2022-12-22"))
+GSPC <- sp500$GSPC
+GSPC1 <- get("GSPC", envir = sp500)
+GSPC2 <- with(sp500, GSPC)
+rm(GSPC1)
+rm(GSPC2)
+head(GSPC)
+```
+2.1 Calculate continuous daily excess returns of SP500 (“^GSPC”) for the period from 1/1/2022 until 12/22/2022 using overnight Fed Funds rates as risk-free rates.
+```{r}
+return = merge(GSPC,FedFunds)
+return = na.omit(return)
+
+#2.1 continuous daily excess return
+return$daily_return = diff(log(GSPC$GSPC.Adjusted))
+return$rf = log(1+return$FedFunds/360)
+return$excess_return = return$daily_return-return$rf
+head(return$excess_return)
+```
+2.2 Calculate average daily excess return, actual return of S&P 500 in 2022 per day, and average FedFund rate of return per day
+```{r}
+#2.2
+#Actual return of SP 500
+actual_return = diff(log(GSPC$GSPC.Adjusted))
+head(actual_return)
+
+#Average FedFunds rate of return
+avg_fed_return = mean(return$FedFunds/360,na.rm= TRUE)
+avg_fed_return
+
+
+#Average Daily Excess Return
+avg_daily_excess_return = mean((actual_return - log(1 + return$FedFunds/360)), na.rm = TRUE)
+avg_daily_excess_return
+
+```
+
+3.1 Download from Oanda using method getFX() from library quantmode for the period from July 1, 2022 to December 22, 2022:
+```{r}
+#Get the Data
+getFX("GBP/USD",from="2022-07-01",to="2022-12-22")
+getFX("USD/JPY",from="2022-07-01",to="2022-12-22")
+```
+3.2 Calculate daily log returns of both exchange rates
+```{r}
+#Daily Log Returns of USDJPY
+USDJPY_LR =  diff(log(USDJPY))
+head(USDJPY_LR)
+
+
+#Daily Log Returns of USDJPY
+GBPUSD_LR =  diff(log(GBPUSD))
+head(GBPUSD_LR)
+```
+3.3 Calculate sample min, mean, sd, skewness, kurtosis, max of log returns for both exchange rates
+
+```{r}
+library(fBasics)
+
+basicStats(GBPUSD_LR)
+#Therefore, the statistics for log returns of GBP/USD are min:-0.018921, max: 0.020607, sd:0.006120, skewness:0.235411, kurtosis:2.170017
+
+basicStats(USDJPY_LR)
+#Therefore, the statistics for log returns of USD/JPY are min:-0.029623, max: 0.015004, sd:0.006042, skewness:-1.387603, kurtosis:5.096345
+```
+3.4 Test hypothesis H0:μ=0 against alternative H0:μ≠0
+```{r}
+t.test(as.vector(USDJPY_LR), mu = 0)
+t.test(as.vector(GBPUSD_LR), mu = 0)
+#Since both of the p-values are much larger than 0.5, we fail to reject the null hypothesis. Therefore, we can believe that the mean of both exchange rate are equal to zero.
+```
+
+
