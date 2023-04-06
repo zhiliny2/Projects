@@ -1,2 +1,1 @@
-# Projects
-Data Science &amp; Financial Quantitative Research
+# Data-Mining-Projects
