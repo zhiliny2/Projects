@@ -1,0 +1,8 @@
+FROM python:slim
+RUN python -m pip install \
+        pandas \
+        numpy
+
+WORKDIR /PythonScript
+COPY /Python/pandas_script.py /PythonScript/pandas_script.py
+CMD ["python", "pandas_script.py"]
