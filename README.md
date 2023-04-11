@@ -1,2 +1,2 @@
 # Projects
-### Data Science &amp; Financial Quantitative Research
+### Data Science &amp; Financial & Quantitative Research Projects
