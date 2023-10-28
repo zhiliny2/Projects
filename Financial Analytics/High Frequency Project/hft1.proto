@@ -1,0 +1,47 @@
+syntax = "proto2";
+
+package HFT_1;
+option optimize_for = SPEED;
+
+enum SideEnum {
+    BUY = 1;
+    SELL = 2;
+} 
+
+// Server -> Client.
+message Event {
+    optional int64 server_timestamp_usec         = 1;
+    optional int32 event_id                      = 2;
+    optional BidAskEvent bid_ask_event           = 3;
+    optional OrderFilledEvent order_filled_event = 4;
+    optional StreamEndEvent stream_end_event     = 5;
+    optional string error                        = 6;
+}
+
+message BidAskEvent {
+    required int32 bid0_price  = 1;
+    required int32 bid0_volume = 2;
+    required int32 ask0_price  = 3;
+    required int32 ask0_volume = 4;
+}
+
+message OrderFilledEvent {
+    required SideEnum side  = 1;
+    required int32 quantity = 2; // always >0 !
+    required int32 price    = 3;
+    required bool forced    = 4; // false when client initiated order, otherwise true
+}
+
+message StreamEndEvent {
+    required int32 pnl           = 1;
+    required int32 total_trades  = 2;
+    required int32 manual_trades = 3;
+    required int32 forced_trades = 4;
+    optional int64 score         = 5;
+}
+
+
+// Client -> Server.
+message Signal {
+    optional int32 signal = 1; // >0 for BUY,  <0 for SELL  and  ==0 for NOTHING
+}
