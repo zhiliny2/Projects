@@ -1,0 +1,85 @@
+---
+output:
+  html_document: default
+  word_document: default
+---
+```{r}
+#Import Module
+library(RQuantLib)
+```
+```{r}
+Option.Type<-"call"
+Underlying.Price<-810
+Strike<-800
+Option.Rate<-.05
+Expiry<- .5
+```
+
+```{r}
+
+call_price <- EuropeanOption(type="call", underlying=Underlying.Price,strike=Strike,
+               dividendYield=0.01,riskFreeRate=Option.Rate, maturity=Expiry, volatility=.2)
+call_price
+
+```
+```{r}
+
+d1=(log(Underlying.Price/Strike) + (Option.Rate+.2**2/2)*Expiry)/(.2*sqrt(Expiry))
+d2=d1-.2*sqrt(Expiry)
+C = Underlying.Price*pnorm(d1)-Strike*exp(-Option.Rate*Expiry)*pnorm(d2)
+C 
+```
+```{r}
+
+d1_d=(log(Underlying.Price/Strike) + (Option.Rate+.2**2/2-0.01)*Expiry)/(.2*sqrt(Expiry))
+d2_d=d1_d-.2*sqrt(Expiry)
+C_divided = Underlying.Price*exp(-0.01*Expiry)*pnorm(d1)-Strike*exp(-Option.Rate*Expiry)*pnorm(d2)
+C_divided 
+```
+Put Call Parity Calculation
+```{r}
+
+p <- call_price$value+Strike*exp(-Option.Rate*Expiry)-Underlying.Price*exp(-0.01*Expiry) # next ta session
+p
+```
+```{r}
+#row names specify the first column as row names
+optionsData  <- read.csv('C:/Users/Richa/Desktop/FA/OptionsPrices.csv',row.names=1)
+
+head(optionsData)
+```
+Implied Volatility Calculation
+```{r}
+put.impliedVolatilities <- as.vector(apply(optionsData, 1, function (z) 
+  EuropeanOptionImpliedVolatility("put", value=z[26], underlying=z[3], 
+  strike=1425, dividendYield = z[2], riskFreeRate = z[2], maturity = z[1]/365, volatility = 0.3)))*100
+```
+
+calculate delta gamma vega breakdown
+```{r}
+
+result = data.frame(matrix(NA, nrow = 5, ncol = 1))
+for (i in 1:5){
+currentPutValue <- EuropeanOption(type="put",underlying = optionsData[i,3], strike = 1425, maturity = optionsData[i,1]/365, riskFreeRate = optionsData[i,2], volatility =put.impliedVolatilities[i]/100 , dividendYield = optionsData[i,2])
+
+putPNL.delta<-as.numeric(currentPutValue)[2]*(optionsData[i+1,3]-optionsData[i,3])
+putPNL.gamma<-.5*as.numeric(currentPutValue)[3]*(optionsData[i+1,3]-optionsData[i,3])^2
+putPNL.vega<-as.numeric(currentPutValue)[4]/100*
+  (put.impliedVolatilities[i+1]-put.impliedVolatilities[i])
+(putPNL.estimated<-c(delta=putPNL.delta,gamma=putPNL.gamma,vega=putPNL.vega))
+result$day[i] <- i
+result$delta[i] <- putPNL.delta
+result$gamma[i] <- putPNL.gamma
+result$vega[i] <- putPNL.vega
+result$estimated[i]<-sum(putPNL.delta,putPNL.gamma,putPNL.vega)
+result$actual[i] <- optionsData[i+1,26]-optionsData[i,26]
+}
+result <- result[,-1]
+result
+
+```
+
+
+
+
+
