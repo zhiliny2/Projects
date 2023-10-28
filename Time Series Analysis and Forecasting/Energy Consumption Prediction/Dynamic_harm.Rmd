@@ -1,0 +1,228 @@
+---
+title: "ts_final_project"
+author: "Han Jiang"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# MSCA 31006 Time Series Analysis and Forecasting
+
+```{r}
+# Set the new directory
+path = '/Users/anthony/Desktop/MSCA Time Series/Assignment/Final Project'
+setwd(path)
+```
+
+```{r}
+library(tseries)
+library(fpp)
+library(forecast)
+library(TSA)
+library(ggplot2)
+```
+
+```{r}
+library(stats)
+library(ggplot2)
+library(MuMIn)
+library(MLmetrics)
+library(tstools)
+```
+
+# Start Here
+
+## Load
+
+```{r}
+file_path = "/Users/anthony/Desktop/MSCA Time Series/Assignment/Final Project/monthly_PJME.csv"
+data <- read.csv(file_path)
+```
+
+## EDA
+
+```{r}
+head(data)
+```
+
+```{r}
+electricity <- ts(data$monthly_sum, start = c(2002,1), frequency = 12)
+
+# Make a time plot 
+plot(electricity, main="Eletricity Consumption")
+```
+```{r}
+tsdisplay(electricity)
+```
+
+
+## Decomposition
+
+```{r}
+plot(decompose(electricity, type="mult"))
+```
+
+```{r}
+boxplot(electricity~cycle(electricity), xlab="Cycle (Year)", ylab="Megawatts(MW)", main="Energy Consumption for PJM")
+```
+
+```{r}
+##Seasonal plot of electricity data
+ggseasonplot(electricity,
+            year.labels=TRUE)+
+  scale_y_log10()+ # Put y axis on a logarithmic scale
+  ylab("Electricity Consumption")+ # An alternate way to label Y axis
+  ggtitle("Seasonal Plot of PJME Electricity Consumption, in Megawatts") # Add a title
+```
+
+```{r}
+kpss.test(electricity)
+```
+
+```{r}
+BoxCox.lambda(electricity)
+```
+
+```{r}
+lambda <- BoxCox.lambda(electricity)
+
+#electricity %>% BoxCox(lambda = lambda) 
+```
+
+
+```{r}
+tsdisplay(diff(diff(electricity,lag = 12)),main='Monthly Average PJME Electricity Consumption (Seasonal Differencing)')
+```
+
+```{r}
+kpss.test(diff(diff(electricity, lag = 6)))
+```
+
+```{r}
+spectrum(electricity)
+```
+
+```{r}
+periodogram(electricity)
+```
+
+## Train Test Split
+
+```{r}
+#pjm_train <- window(electricity, end = c(2017,7)) #end train in 2017.8
+#pjm_test  <- window(electricity, start = c(2017,8)) #use last year of dataset as test
+
+pjm_train <- window(electricity, end = c(2015,7)) #end train in 2017.8
+pjm_test  <- window(electricity, start = c(2015,8)) #use last year of dataset as test
+frequency(pjm_train) 
+```
+
+```{r}
+#cycle(pjm_test) 
+cycle(electricity) 
+```
+
+## Dynamic Harmonic Regression
+
+```{r}
+temp <- periodogram(electricity)
+```
+
+```{r}
+spec_p <- matrix(round(temp$spec/1e5, 2))
+freq_p <- matrix(temp$freq)
+cbind(spec_p, freq_p) # major spikes at 0.005, 0.085, 0.165, 0.170, 0.250
+```
+
+```{r}
+library(gridExtra)
+```
+
+```{r}
+plots <- list()
+for (i in seq(6)) {
+  fit <- auto.arima(pjm_train, xreg = fourier(pjm_train, K = i),
+    seasonal = FALSE, lambda = 0)
+  plots[[i]] <- autoplot(forecast(fit,
+      xreg=fourier(pjm_train, K=i, h=36))) +
+    xlab(paste("K=",i,"   AICC=",round(fit[["aicc"]],2))) +
+    ylab("")+
+    theme_grey(base_size = 7)  # Adjust the base font size
+}
+gridExtra::grid.arrange(
+  plots[[1]],plots[[2]],plots[[3]],
+  plots[[4]],plots[[5]],plots[[6]], nrow=3)
+```
+
+### Forecast with Auto ARIMA
+
+We create a regression model using a Fourier transformation (K=2) as the predictor, and Arima errors. This results in an ARIMA(0,1,2)(0,0,2)[12] model. The residuals are stationary and relatively normally distributed, signaling that they are white noise (p=0.09553).
+
+```{r}
+DHR <-  auto.arima(pjm_train, xreg=fourier(pjm_train, K=2)) 
+summary(DHR)
+```
+
+```{r}
+checkresiduals(DHR)
+```
+
+```{r}
+DHR1_fcast <- forecast(DHR, h=12, xreg=fourier(pjm_train, K=2, h=36))
+plot(DHR1_fcast, pjm_test)
+```
+
+```{r}
+#tsplot(cbind(pjm_test, DHR1_fcast$mean), plot_title = "Actual vs. Predicted", auto_legend=TRUE)
+```
+
+```{r}
+ts.plot(pjm_test, ts(DHR1_fcast$mean, start=c(2015,8), frequency=12), gpars = list(col = c("black", "blue")),
+        xlab = "Date", ylab = "Value",
+        main = "Actual vs DHR Prediction", col.lab = "black", col.main = "black", col.axis = "black")
+
+legend("topleft", legend = c("Actual", "Prediction"), col = c("black", "blue"), lty = 1, lwd = 2)
+```
+
+```{r}
+MAE(DHR1_fcast$mean, pjm_test)
+```
+
+```{r}
+RMSE(DHR1_fcast$mean, pjm_test)
+```
+
+### Forecast with ARIMA
+
+```{r}
+# Fit ARIMA(2,1,1) with DHR using Fourier terms
+DHR.2 = Arima(pjm_train, order = c(2, 0, 0), seasonal = list(order = c(2, 0, 0), period = 12),
+                   xreg = fourier(pjm_train, K = 2))
+
+# Display summary of the DHR_ARIMA model
+summary(DHR.2)
+```
+
+```{r}
+checkresiduals(DHR.2)
+```
+
+```{r}
+DHR2_fcast <- forecast(DHR.2, h=36, xreg=fourier(pjm_train, K=2, h=36))
+plot(DHR2_fcast, pjm_test)
+```
+
+```{r}
+ts.plot(pjm_test, ts(DHR2_fcast$mean, start=c(2015,8), end=c(2018,7), frequency = 12), gpars = list(col = c("black", "blue")),
+        xlab = "Date", ylab = "Value",
+        main = "Actual vs DHR Prediction", col.lab = "black", col.main = "black", col.axis = "black")
+
+legend("topleft", legend = c("Actual", "Prediction"), col = c("black", "blue"), lty = 1, lwd = 2)
+```
+
+```{r}
+MAE(DHR2_fcast$mean, pjm_test)
+```
+
+```{r}
+RMSE(DHR2_fcast$mean, pjm_test)
+```

@@ -1,0 +1,178 @@
+---
+title: "ts_final_project"
+author: "Han Jiang"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# MSCA 31006 Time Series Analysis and Forecasting
+
+```{r}
+# Set the new directory
+path = '/Users/anthony/Desktop/MSCA Time Series/Assignment/Final Project'
+setwd(path)
+```
+
+```{r}
+library(tseries)
+library(fpp)
+library(forecast)
+library(TSA)
+library(ggplot2)
+```
+
+```{r}
+library(stats)
+library(ggplot2)
+library(MuMIn)
+library(Metrics)
+library(tstools)
+```
+
+# Start Here
+
+## Load
+
+```{r}
+file_path = "/Users/anthony/Desktop/MSCA Time Series/Assignment/Final Project/monthly_PJME.csv"
+data <- read.csv(file_path)
+```
+
+## EDA
+
+```{r}
+head(data)
+```
+
+```{r}
+electricity <- ts(data$monthly_sum, start = c(2002,1), frequency = 12)
+
+# Make a time plot 
+plot(electricity, main="Eletricity Consumption")
+```
+```{r}
+tsdisplay(electricity)
+```
+
+
+## Decomposition
+
+```{r}
+plot(decompose(electricity, type="mult"))
+```
+
+```{r}
+boxplot(electricity~cycle(electricity), xlab="Cycle (Day)", ylab="Megawatts(MW)", main="Energy Consumption for PJM")
+```
+
+
+```{r, fig.height=5, fig.width=10}
+# Seasonal plot of electricity data with adjusted length
+ggseasonplot(electricity,
+             year.labels = FALSE) +
+  scale_y_log10() +
+  ylab("Electricity Consumption") +
+  ggtitle("Seasonal Plot of PJME Electricity Consumption, in Megawatts")
+```
+
+```{r}
+kpss.test(electricity)
+```
+
+```{r}
+BoxCox.lambda(electricity)
+```
+
+```{r}
+lambda <- BoxCox.lambda(electricity)
+
+electricity %>% BoxCox(lambda = lambda) 
+```
+
+
+```{r}
+tsdisplay(diff(diff(electricity,lag = 60)),main='Monthly Average PJME Electricity Consumption (Seasonal Differencing)')
+```
+
+```{r}
+kpss.test(diff(diff(electricity, lag = 6)))
+```
+
+## Train Test Split
+
+```{r}
+pjm_train <- window(electricity, end = c(2015,7)) #end train in 2017.8
+pjm_test  <- window(electricity, start = c(2015,8)) #use last year of dataset as test
+```
+
+```{r}
+cycle(pjm_test) 
+#cycle(electricity) 
+```
+
+
+## Simple Linear Regression
+
+```{r}
+time <- as.numeric(time(pjm_train))
+sr <- lm(pjm_train ~ time)
+fitted <- sr$fitted.values
+lmfcst <- forecast(sr, newdata = as.numeric(time(pjm_test)))
+```
+
+
+
+```{r}
+mae_sr <- mae(pjm_test, as.numeric(lmfcst$mean))
+rmse_sr <- rmse(pjm_test, as.numeric(lmfcst$mean))
+rbind(mae_sr,rmse_sr)
+```
+
+```{r}
+checkresiduals(sr, main = 'Residuals for Linear Regression')
+```
+
+```{r}
+train_actual <- append(sr$fitted.values, rep(NA, 36))
+test_actual <- append(rep(NA, 163), lmfcst$mean)
+
+plot(time(electricity), electricity, type="l",col=1,xlab="Time", ylab="Consumption", main = 'Linear Regression Forecast')
+lines(as.numeric(time(electricity)), train_actual, type="l",col='red')
+lines(as.numeric(time(electricity)), test_actual, type="l",col='blue')
+legend("topleft",legend=c("Actual","Fitted Trend", "Predicted Values"),col=c(1, 'red', 'blue'),lty=1)
+```
+```{r}
+
+```
+
+## Simple Regression Sliding & Expanding Window
+
+## TSLM Split
+```{r}
+tslm <- tslm(pjm_train ~ trend + season)
+tslmfcst <- forecast(tslm, h = 36)
+
+mae_tslm <- mae(pjm_test, as.numeric(tslmfcst$mean))
+rmse_tslm <- rmse(pjm_test, as.numeric(tslmfcst$mean))
+rbind(mae_tslm,rmse_tslm )
+```
+
+```{r}
+train_fitted <- append(tslm$fitted.values, rep(NA, 36))
+test_fitted <- append(rep(NA, 163), as.numeric(tslmfcst$mean))
+
+plot(time(electricity), electricity, type="l",col=1,xlab="Time", ylab="Consumption", main = 'Time Series Linear Model Forecast')
+lines(as.numeric(time(electricity)), train_fitted, type="l",col='red')
+lines(as.numeric(time(electricity)), test_fitted, type="l",col='blue')
+legend("topleft",legend=c("Actual","Fitted Trend", "Predicted Values"),col=c(1, 'red', 'blue'),lty=1)
+```
+
+```{r}
+checkresiduals(tslm, main = 'Time Series Linear Model')
+```
+
+```{r}
+
+```
+
+
